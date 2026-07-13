@@ -9,7 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => {
-    res.send('WhatsApp Bridge Service is Running!');
+    res.send('WhatsApp Bridge Service is Active!');
 });
 
 app.listen(PORT, () => {
@@ -17,9 +17,7 @@ app.listen(PORT, () => {
 });
 
 const PYTHON_SERVER_URL = process.env.PYTHON_SERVER_URL || 'https://whatsapp-ai-bot-l8kf.onrender.com/process-message';
-
-// 📱 Apna Number yahan daalein (Ex: '919876543210')
-const PHONE_NUMBER = process.env.PHONE_NUMBER || '919485708924'; 
+const PHONE_NUMBER = process.env.PHONE_NUMBER || '919458708924'; 
 
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
@@ -32,7 +30,7 @@ async function connectToWhatsApp() {
         auth: state,
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
-        browser: ["Ubuntu", "Chrome", "20.0.04"]
+        browser: ["Mac OS", "Chrome", "121.0.0.0"]
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -40,14 +38,17 @@ async function connectToWhatsApp() {
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
-                // Formatting number to numbers only
                 const cleanNumber = PHONE_NUMBER.replace(/[^0-9]/g, '');
-                console.log(`📞 Generating pairing code for number: ${cleanNumber}`);
+                if (!cleanNumber || cleanNumber.length < 10 || cleanNumber.includes('X')) {
+                    console.log("⚠️ PLEASE SET A VALID PHONE_NUMBER!");
+                    return;
+                }
                 
+                console.log(`📞 Requesting Numeric Pairing Code for: ${cleanNumber}`);
                 let code = await sock.requestPairingCode(cleanNumber);
                 code = code?.match(/.{1,4}/g)?.join("-") || code;
                 console.log("\n==================================================");
-                console.log(`🔑 YOUR WHATSAPP PAIRING CODE: ${code}`);
+                console.log(`🔑 NUMERIC PAIRING CODE (OTP): ${code}`);
                 console.log("==================================================\n");
             } catch (err) {
                 console.error("❌ Pairing Code error:", err.message);
@@ -59,11 +60,13 @@ async function connectToWhatsApp() {
         const { connection, lastDisconnect } = update;
 
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            
             if (shouldReconnect) {
                 connectToWhatsApp();
             } else {
-                console.log("❌ Logged out. Clearing session...");
+                console.log("❌ Logged Out. Cleaning session...");
                 if (fs.existsSync('whatsapp_session')) {
                     fs.rmSync('whatsapp_session', { recursive: true, force: true });
                 }
@@ -85,7 +88,7 @@ async function connectToWhatsApp() {
 
                 if (!text) return;
 
-                const lowerText = text.toLowerCase();
+                const lowerText = text.toLowerCase().trim();
                 console.log(`📩 New Message from ${sender}: "${text}"`);
 
                 try {
@@ -97,7 +100,7 @@ async function connectToWhatsApp() {
                     const data = res.data;
 
                     if (data.reply_text && data.reply_text.trim() !== "") {
-                        await delay(2000);
+                        await delay(1500);
                         await sock.sendMessage(sender, { text: data.reply_text });
                         console.log(`🤖 AI Reply Sent to ${sender}`);
                     }
