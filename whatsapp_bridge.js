@@ -4,6 +4,19 @@ const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
 const pino = require('pino');
+const express = require('express');
+
+// Express App to satisfy Render Port Binding requirement
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.send('WhatsApp Bridge Service is Running!');
+});
+
+app.listen(PORT, () => {
+    console.log(`🚀 Web server listening on port ${PORT}`);
+});
 
 // Aapka Live Render Python Server URL
 const PYTHON_SERVER_URL = process.env.PYTHON_SERVER_URL || 'https://whatsapp-ai-bot-l8kf.onrender.com/process-message';
@@ -31,7 +44,6 @@ async function connectToWhatsApp() {
             console.log("\n==================================================");
             console.log("📲 SCAN THIS HIGH-RES QR CODE FROM YOUR WHATSAPP:");
             console.log("==================================================\n");
-            // small: false se QR Code bada aur clean render hoga
             qrcode.generate(qr, { small: false });
         }
 
@@ -58,7 +70,6 @@ async function connectToWhatsApp() {
                 console.log(`📩 New Message from ${sender}: "${text}"`);
 
                 try {
-                    // Send message to Python AI Server on Render
                     const res = await axios.post(PYTHON_SERVER_URL, {
                         from: sender,
                         message: text
@@ -66,15 +77,12 @@ async function connectToWhatsApp() {
 
                     const data = res.data;
 
-                    // AI Reply
                     if (data.reply_text && data.reply_text.trim() !== "") {
-                        await delay(2000); // 2 sec natural delay
+                        await delay(2000);
                         await sock.sendMessage(sender, { text: data.reply_text });
                         console.log(`🤖 AI Reply Sent to ${sender}`);
                     }
 
-                    // Keyword Triggers for Media
-                    // PDF Check
                     if (lowerText.includes('pdf') || lowerText.includes('brochure') || lowerText.includes('syllabus')) {
                         await delay(1000);
                         const pdfPath = path.join(__dirname, 'files', 'brochure.pdf');
@@ -84,11 +92,9 @@ async function connectToWhatsApp() {
                                 mimetype: 'application/pdf',
                                 fileName: 'Course_Brochure.pdf'
                             });
-                            console.log("📄 PDF Sent Successfully!");
                         }
                     }
 
-                    // Video Check
                     if (lowerText.includes('demo') || lowerText.includes('video') || lowerText.includes('sample')) {
                         await delay(1000);
                         const videoPath = path.join(__dirname, 'files', 'demo.mp4');
@@ -98,11 +104,9 @@ async function connectToWhatsApp() {
                                 caption: '🎬 Demo Class Video',
                                 mimetype: 'video/mp4'
                             });
-                            console.log("🎬 Video Sent Successfully!");
                         }
                     }
 
-                    // Image Check
                     if (lowerText.includes('photo') || lowerText.includes('banner') || lowerText.includes('poster') || lowerText.includes('image')) {
                         await delay(1000);
                         const imgPath = path.join(__dirname, 'files', 'banner.jpg');
@@ -111,7 +115,6 @@ async function connectToWhatsApp() {
                                 image: fs.readFileSync(imgPath),
                                 caption: '🖼️ Course Offer & Details'
                             });
-                            console.log("🖼️ Image Sent Successfully!");
                         }
                     }
 
