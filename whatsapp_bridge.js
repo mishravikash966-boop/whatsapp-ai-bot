@@ -6,7 +6,7 @@ const fs = require('fs');
 const pino = require('pino');
 const express = require('express');
 
-// Express App to satisfy Render Port Binding requirement
+// Express App for Render Port Binding
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -18,7 +18,7 @@ app.listen(PORT, () => {
     console.log(`🚀 Web server listening on port ${PORT}`);
 });
 
-// Aapka Live Render Python Server URL
+// Live Render Python Server URL
 const PYTHON_SERVER_URL = process.env.PYTHON_SERVER_URL || 'https://whatsapp-ai-bot-l8kf.onrender.com/process-message';
 
 const delay = ms => new Promise(res => setTimeout(res, ms));
@@ -42,9 +42,10 @@ async function connectToWhatsApp() {
 
         if (qr) {
             console.log("\n==================================================");
-            console.log("📲 SCAN THIS HIGH-RES QR CODE FROM YOUR WHATSAPP:");
+            console.log("📲 SCAN THIS CLEAN QR CODE FROM YOUR WHATSAPP:");
             console.log("==================================================\n");
-            qrcode.generate(qr, { small: false });
+            // { small: true } use karke compact & sharp QR code banega
+            qrcode.generate(qr, { small: true });
         }
 
         if (connection === 'close') {
