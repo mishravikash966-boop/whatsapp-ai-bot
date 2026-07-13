@@ -5,7 +5,6 @@ const fs = require('fs');
 const pino = require('pino');
 const express = require('express');
 
-// Express App for Render Port Binding
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -17,11 +16,10 @@ app.listen(PORT, () => {
     console.log(`🚀 Web server listening on port ${PORT}`);
 });
 
-// Live Render Python Server URL
 const PYTHON_SERVER_URL = process.env.PYTHON_SERVER_URL || 'https://whatsapp-ai-bot-l8kf.onrender.com/process-message';
 
-// 📱 APNA WHATSAPP NUMBER YAHAN DALIN (With Country Code 91, No + sign)
-const PHONE_NUMBER = process.env.PHONE_NUMBER || '919458708924'; 
+// 📱 Apna Number yahan daalein (Ex: '919876543210')
+const PHONE_NUMBER = process.env.PHONE_NUMBER || '919485708924'; 
 
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
@@ -32,21 +30,24 @@ async function connectToWhatsApp() {
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: false, // QR Code band kar diya
+        printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
         browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Agar pehle se account registered nahi hai, toh Pairing Code generate karein
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
-                let code = await sock.requestPairingCode(PHONE_NUMBER);
+                // Formatting number to numbers only
+                const cleanNumber = PHONE_NUMBER.replace(/[^0-9]/g, '');
+                console.log(`📞 Generating pairing code for number: ${cleanNumber}`);
+                
+                let code = await sock.requestPairingCode(cleanNumber);
                 code = code?.match(/.{1,4}/g)?.join("-") || code;
                 console.log("\n==================================================");
-                console.log(`🔑 YOUR WHATSAPP PAIRING CODE (OTP): ${code}`);
+                console.log(`🔑 YOUR WHATSAPP PAIRING CODE: ${code}`);
                 console.log("==================================================\n");
             } catch (err) {
                 console.error("❌ Pairing Code error:", err.message);
@@ -59,7 +60,15 @@ async function connectToWhatsApp() {
 
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) connectToWhatsApp();
+            if (shouldReconnect) {
+                connectToWhatsApp();
+            } else {
+                console.log("❌ Logged out. Clearing session...");
+                if (fs.existsSync('whatsapp_session')) {
+                    fs.rmSync('whatsapp_session', { recursive: true, force: true });
+                }
+                connectToWhatsApp();
+            }
         } else if (connection === 'open') {
             console.log('\n==================================================');
             console.log('✅ WHATSAPP CONNECTED & READY FOR MESSAGES!');
