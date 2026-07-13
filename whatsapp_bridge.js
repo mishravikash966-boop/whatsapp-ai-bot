@@ -1,52 +1,126 @@
-import os
-from flask import Flask, request, jsonify
-from google import genai
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
+const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
+const pino = require('pino');
 
-app = Flask(__name__)
+// Aapka Live Render Python Server URL
+const PYTHON_SERVER_URL = process.env.PYTHON_SERVER_URL || 'https://whatsapp-ai-bot-l8kf.onrender.com/process-message';
 
-# Gemini API Key Setup
-# Local testing ke liye yahan key daal sakte hain, ya Render Environment Variables se read karega
-API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyA57OTBTGkh7QLDd_v5x4zHrl9jD7Yutww")
-client = genai.Client(api_key=API_KEY)
+const delay = ms => new Promise(res => setTimeout(res, ms));
 
-SYSTEM_PROMPT = """
-Aap ek helpful sales assistant hain.
-- Friendly short Hinglish reply dein.
-- Agar user 'PDF', 'Brochure' ya 'Syllabus' bole, toh kahein: "Ji bilkul, main aapko brochure PDF bhej raha hoon."
-- Agar user 'Demo' ya 'Video' bole, toh kahein: "Ji bilkul, main aapko Demo video bhej raha hoon."
-- Agar user 'Photo', 'Banner' ya 'Poster' bole, toh kahein: "Ji bilkul, main aapko poster bhej raha hoon."
-"""
+async function connectToWhatsApp() {
+    const { state, saveCreds } = await useMultiFileAuthState('whatsapp_session');
+    const { version } = await fetchLatestBaileysVersion();
 
-@app.route('/', methods=['GET'])
-def home():
-    return jsonify({"status": "active", "message": "Python AI Server Running!"})
+    const sock = makeWASocket({
+        version,
+        auth: state,
+        printQRInTerminal: false,
+        logger: pino({ level: 'silent' }),
+        browser: ["Windows", "Chrome", "120.0.0.0"]
+    });
 
-@app.route('/process-message', methods=['POST'])
-def process_message():
-    try:
-        data = request.json or {}
-        user_msg = str(data.get('message', '')).strip()
+    sock.ev.on('creds.update', saveCreds);
 
-        if not user_msg:
-            return jsonify({"reply_text": ""})
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
 
-        # Generate Gemini AI Reply using 1.5-flash (1500 FREE Requests Daily)
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=f"{SYSTEM_PROMPT}\nUser: {user_msg}\nAssistant:"
-        )
-        ai_text = response.text
+        if (qr) {
+            console.log("\n==================================================");
+            console.log("📲 SCAN THIS QR CODE FROM YOUR WHATSAPP:");
+            console.log("==================================================\n");
+            qrcode.generate(qr, { small: true });
+        }
 
-        return jsonify({
-            "reply_text": ai_text
-        })
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            if (shouldReconnect) connectToWhatsApp();
+        } else if (connection === 'open') {
+            console.log('\n==================================================');
+            console.log('✅ WHATSAPP CONNECTED & READY FOR MESSAGES!');
+            console.log('==================================================\n');
+        }
+    });
 
-    except Exception as e:
-        print("❌ AI Error:", str(e))
-        return jsonify({"reply_text": ""})
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type === 'notify') {
+            const msg = messages[0];
+            if (!msg.key.fromMe) {
+                const sender = msg.key.remoteJid;
+                const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
 
-if __name__ == '__main__':
-    # Render Dynamic Port Binding Fix
-    port = int(os.environ.get('PORT', 5000))
-    print(f"🚀 Server running on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
+                if (!text) return;
+
+                const lowerText = text.toLowerCase();
+                console.log(`📩 New Message from ${sender}: "${text}"`);
+
+                try {
+                    // Send message to Python AI Server on Render
+                    const res = await axios.post(PYTHON_SERVER_URL, {
+                        from: sender,
+                        message: text
+                    });
+
+                    const data = res.data;
+
+                    // AI Reply
+                    if (data.reply_text && data.reply_text.trim() !== "") {
+                        await delay(2000); // 2 sec natural delay
+                        await sock.sendMessage(sender, { text: data.reply_text });
+                        console.log(`🤖 AI Reply Sent to ${sender}`);
+                    }
+
+                    // Keyword Triggers for Media
+
+                    // PDF Check
+                    if (lowerText.includes('pdf') || lowerText.includes('brochure') || lowerText.includes('syllabus')) {
+                        await delay(1000);
+                        const pdfPath = path.join(__dirname, 'files', 'brochure.pdf');
+                        if (fs.existsSync(pdfPath)) {
+                            await sock.sendMessage(sender, {
+                                document: fs.readFileSync(pdfPath),
+                                mimetype: 'application/pdf',
+                                fileName: 'Course_Brochure.pdf'
+                            });
+                            console.log("📄 PDF Sent Successfully!");
+                        }
+                    }
+
+                    // Video Check
+                    if (lowerText.includes('demo') || lowerText.includes('video') || lowerText.includes('sample')) {
+                        await delay(1000);
+                        const videoPath = path.join(__dirname, 'files', 'demo.mp4');
+                        if (fs.existsSync(videoPath)) {
+                            await sock.sendMessage(sender, {
+                                video: fs.readFileSync(videoPath),
+                                caption: '🎬 Demo Class Video',
+                                mimetype: 'video/mp4'
+                            });
+                            console.log("🎬 Video Sent Successfully!");
+                        }
+                    }
+
+                    // Image Check
+                    if (lowerText.includes('photo') || lowerText.includes('banner') || lowerText.includes('poster') || lowerText.includes('image')) {
+                        await delay(1000);
+                        const imgPath = path.join(__dirname, 'files', 'banner.jpg');
+                        if (fs.existsSync(imgPath)) {
+                            await sock.sendMessage(sender, {
+                                image: fs.readFileSync(imgPath),
+                                caption: '🖼️ Course Offer & Details'
+                            });
+                            console.log("🖼️ Image Sent Successfully!");
+                        }
+                    }
+
+                } catch (err) {
+                    console.error("❌ Error processing request:", err.message);
+                }
+            }
+        }
+    });
+}
+
+connectToWhatsApp();
