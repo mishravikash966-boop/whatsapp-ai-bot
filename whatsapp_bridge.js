@@ -1,5 +1,4 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
@@ -21,6 +20,9 @@ app.listen(PORT, () => {
 // Live Render Python Server URL
 const PYTHON_SERVER_URL = process.env.PYTHON_SERVER_URL || 'https://whatsapp-ai-bot-l8kf.onrender.com/process-message';
 
+// 📱 APNA WHATSAPP NUMBER YAHAN DALIN (With Country Code 91, No + sign)
+const PHONE_NUMBER = process.env.PHONE_NUMBER || '919458708924'; 
+
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
 async function connectToWhatsApp() {
@@ -30,23 +32,30 @@ async function connectToWhatsApp() {
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: false,
+        printQRInTerminal: false, // QR Code band kar diya
         logger: pino({ level: 'silent' }),
-        browser: ["Windows", "Chrome", "120.0.0.0"]
+        browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
+    // Agar pehle se account registered nahi hai, toh Pairing Code generate karein
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                let code = await sock.requestPairingCode(PHONE_NUMBER);
+                code = code?.match(/.{1,4}/g)?.join("-") || code;
+                console.log("\n==================================================");
+                console.log(`🔑 YOUR WHATSAPP PAIRING CODE (OTP): ${code}`);
+                console.log("==================================================\n");
+            } catch (err) {
+                console.error("❌ Pairing Code error:", err.message);
+            }
+        }, 4000);
+    }
 
-        if (qr) {
-            console.log("\n==================================================");
-            console.log("📲 SCAN THIS CLEAN QR CODE FROM YOUR WHATSAPP:");
-            console.log("==================================================\n");
-            // { small: true } use karke compact & sharp QR code banega
-            qrcode.generate(qr, { small: true });
-        }
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update;
 
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
