@@ -4,8 +4,8 @@ from google import genai
 
 app = Flask(__name__)
 
-# Gemini API Key Setup
-API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyA57OTBTGkh7QLDd_v5x4zHrl9jD7Yutww")
+# Gemini API Key Render Environment Variable se automatically read karega
+API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=API_KEY)
 
 SYSTEM_PROMPT = """
@@ -29,9 +29,9 @@ def process_message():
         if not user_msg:
             return jsonify({"reply_text": ""})
 
-        # Generate Gemini AI Reply
+        # Generate Gemini AI Reply using 1.5-flash
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-1.5-flash',
             contents=f"{SYSTEM_PROMPT}\nUser: {user_msg}\nAssistant:"
         )
         ai_text = response.text
@@ -42,9 +42,9 @@ def process_message():
 
     except Exception as e:
         print("❌ AI Error:", str(e))
-        # Default error message hata diya gaya hai taaki faltu line send na ho
         return jsonify({"reply_text": ""})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
+    print(f"🚀 Server running on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
