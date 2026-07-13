@@ -73,8 +73,6 @@ async function connectToWhatsApp() {
                     }
 
                     // Keyword Triggers for Media
-
-                    // PDF Check
                     if (lowerText.includes('pdf') || lowerText.includes('brochure') || lowerText.includes('syllabus')) {
                         await delay(1000);
                         const pdfPath = path.join(__dirname, 'files', 'brochure.pdf');
@@ -88,7 +86,6 @@ async function connectToWhatsApp() {
                         }
                     }
 
-                    // Video Check
                     if (lowerText.includes('demo') || lowerText.includes('video') || lowerText.includes('sample')) {
                         await delay(1000);
                         const videoPath = path.join(__dirname, 'files', 'demo.mp4');
@@ -102,7 +99,6 @@ async function connectToWhatsApp() {
                         }
                     }
 
-                    // Image Check
                     if (lowerText.includes('photo') || lowerText.includes('banner') || lowerText.includes('poster') || lowerText.includes('image')) {
                         await delay(1000);
                         const imgPath = path.join(__dirname, 'files', 'banner.jpg');
