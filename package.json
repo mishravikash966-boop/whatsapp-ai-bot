@@ -1,0 +1,11 @@
+{
+  "name": "whatsapp-ai-bot",
+  "version": "1.0.0",
+  "main": "whatsapp_bridge.js",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.23",
+    "axios": "^1.18.1",
+    "baileys": "^7.0.0-rc13",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
