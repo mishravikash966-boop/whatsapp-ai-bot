@@ -1,6 +1,8 @@
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
 const axios = require('axios');
+
+// ⚠️ APNA WHATSAPP NUMBER YAHAN BINA HASH/PLUS KE DAALEIN (E.g., "919876543210")
+const MY_PHONE_NUMBER = "919458708924"; 
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -11,8 +13,6 @@ const client = new Client({
     takeoverTimeoutMs: 120000,
     takeoverOnConflict: true,
     bypassCSP: true,
-    
-    // Docker layer se globally injected Chrome configuration path
     puppeteer: {
         headless: true,
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
@@ -33,9 +33,17 @@ const client = new Client({
 
 const PYTHON_BACKEND_URL = "https://whatsapp-ai-bot-l8kf.onrender.com/process-message";
 
-client.on('qr', (qr) => {
-    console.log('🔄 Scan this QR Code to connect your WhatsApp:');
-    qrcode.generate(qr, { small: true });
+// 🎯 QR CODE KI JAGAH DIRECT OTP GENERATION LOGIC
+client.on('qr', async (qr) => {
+    try {
+        console.log("🔄 Requesting OTP Pairing Code for Number:", MY_PHONE_NUMBER);
+        const pairingCode = await client.requestPairingCode(MY_PHONE_NUMBER);
+        console.log("\n==========================================");
+        console.log(`🔑 APKA WHATSAPP OTP CODE HAI: ${pairingCode}`);
+        console.log("==========================================\n");
+    } catch (err) {
+        console.error("❌ OTP Generate karne me error aaya:", err.message);
+    }
 });
 
 client.on('ready', () => {
@@ -47,7 +55,6 @@ client.on('message', async (msg) => {
 
     try {
         console.log(`📩 Incoming: ${msg.body}`);
-
         const response = await axios.post(PYTHON_BACKEND_URL, {
             message: msg.body
         }, {
