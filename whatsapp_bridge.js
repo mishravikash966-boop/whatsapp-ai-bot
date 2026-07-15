@@ -2,16 +2,18 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 
-// Running instance setup
+// Docker environment ke liye perfectly optimized client configuration
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppetShowBrowser: false,
-    authTimeoutMs: 60000,
+    authTimeoutMs: 90000,
     qrTimeoutMs: 60000,
     restartOnAuthFail: true,
     takeoverTimeoutMs: 120000,
     takeoverOnConflict: true,
     bypassCSP: true,
+    // 🎯 DOCKER LINUX BINARY ROUTING PATH
+    executablePath: '/usr/bin/google-chrome-stable',
     args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -19,14 +21,15 @@ const client = new Client({
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--no-zygote',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--headless=new'
     ]
 });
 
 const PYTHON_BACKEND_URL = "https://whatsapp-ai-bot-l8kf.onrender.com/process-message";
 
 client.on('qr', (qr) => {
-    console.log('🔄 QR generated (If logged out):');
+    console.log('🔄 Scan this QR Code to connect your WhatsApp:');
     qrcode.generate(qr, { small: true });
 });
 
@@ -48,22 +51,19 @@ client.on('message', async (msg) => {
 
         const apiData = response.data;
 
-        // 🎯 CASE 1: ROUTING AS DOCUMENT ATTACHMENT (Jaise PDF bina crash hue jaati hai)
+        // 🎯 CASE 1: ROUTING AS DOCUMENT ATTACHMENT (Audio bypass layer)
         if (apiData.status === "success" && apiData.send_type === "document") {
             console.log(`📁 Processing Audio Document from: ${apiData.file_url}`);
             
-            // Text caption pehle jayega
             if (apiData.reply) {
                 await client.sendMessage(msg.from, apiData.reply);
             }
 
-            // Audio Media chunk download aur dispatch pipeline
             const media = await MessageMedia.fromUrl(apiData.file_url);
             await client.sendMessage(msg.from, media);
             
             console.log("📄 Audio file injected and sent successfully!");
         } 
-        
         // 🎯 CASE 2: NORMAL TEXT RESPONSE TIER
         else if (apiData.status === "success" && apiData.reply) {
             console.log(`💬 Dispatching Text: ${apiData.reply}`);
