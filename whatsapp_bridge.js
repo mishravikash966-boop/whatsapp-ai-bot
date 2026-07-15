@@ -1,10 +1,28 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
-// ⚠️ APNA WHATSAPP NUMBER YAHAN BINA HASH/PLUS KE DAALEIN (E.g., "91XXXXXXXXXX")
+// ⚠️ APNA WHATSAPP NUMBER YAHAN BINA HASH/PLUS KE DAALEIN
 const MY_PHONE_NUMBER = "919458708924"; 
 const PYTHON_BACKEND_URL = "https://whatsapp-ai-bot-l8kf.onrender.com/process-message";
+
+// Local memory me file download karne ka function
+async function downloadAudio(url, filepath) {
+    const writer = fs.createWriteStream(filepath);
+    const response = await axios({
+        url,
+        method: 'GET',
+        responseType: 'stream',
+        timeout: 15000 // 15 seconds limit
+    });
+    response.data.pipe(writer);
+    return new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+    });
+}
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -13,48 +31,22 @@ async function startBot() {
         auth: state,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        // ⚡ KEEP ALIVE SETTINGS: Server ko disconnected state me jaane se rokega
         keepAliveIntervalMs: 30000,
         defaultQueryTimeoutMs: 60000,
-        connectTimeoutMs: 60000,
-        emitOwnEvents: false
+        connectTimeoutMs: 60000
     });
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        
+        const { connection, lastDisconnect } = update;
         if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
-            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-            console.log(`🔴 Connection closed (Reason: ${statusCode}). Reconnecting: ${shouldReconnect}`);
-            if (shouldReconnect) {
-                // Thoda delay dekar reconnect karenge taaki server lock na kare
+            if (statusCode !== DisconnectReason.loggedOut) {
                 setTimeout(() => { startBot(); }, 5000);
             }
         } else if (connection === 'open') {
-            console.log('🟢 WhatsApp Bridge (Baileys Engine) Active & Authenticated!');
-        }
-
-        // Jab tak credentials register nahi hote, direct pairing code generate hoga
-        if (!sock.authState.creds.registered && connection !== 'open' && connection !== 'close') {
-            try {
-                console.log(`⏳ Requesting 8-Digit OTP Code for ${MY_PHONE_NUMBER}...`);
-                // 3 seconds ke safe timeout ke baad direct call
-                setTimeout(async () => {
-                    try {
-                        let code = await sock.requestPairingCode(MY_PHONE_NUMBER);
-                        console.log("\n==========================================");
-                        console.log(`🔑 APKA WHATSAPP OTP CODE HAI: ${code}`);
-                        console.log("==========================================\n");
-                    } catch (err) {
-                        console.log("⚠️ OTP Request Error inside trigger:", err.message);
-                    }
-                }, 3000);
-            } catch (err) {
-                console.log("⚠️ Parent OTP Trigger Error:", err.message);
-            }
+            console.log('🟢 WhatsApp Bridge Active & Authenticated!');
         }
     });
 
@@ -78,22 +70,40 @@ async function startBot() {
             const apiData = response.data;
 
             if (apiData.status === "success") {
+                // 1. Pehle text AI reply send karein
                 if (apiData.reply) {
                     await sock.sendMessage(from, { text: apiData.reply });
                 }
 
+                // 2. Playable Voice Note (.ptt) send karein jo mobile me directly play hogi
                 if (apiData.send_type === "document" && apiData.file_url) {
-                    console.log(`🎵 Injecting Native Voice Note: ${apiData.file_url}`);
-                    await sock.sendMessage(from, { 
-                        audio: { url: apiData.file_url }, 
-                        mimetype: 'audio/mp4', 
-                        ptt: true 
-                    });
-                    console.log("✅ Voice note dispatched!");
+                    console.log(`🎵 Downloading audio file from: ${apiData.file_url}`);
+                    const localPath = path.join(__dirname, 'temp_voice.mp3');
+                    
+                    try {
+                        await downloadAudio(apiData.file_url, localPath);
+                        console.log("✅ Audio successfully downloaded to local buffer. Now dispatching...");
+
+                        // Sending as Native Playable Voice Note
+                        await sock.sendMessage(from, { 
+                            audio: fs.readFileSync(localPath), 
+                            mimetype: 'audio/mp4', // Safe format for iOS/Android WhatsApp players
+                            ptt: true              // Voice note feature (green mic player)
+                        });
+
+                        console.log("✅ Audio sent successfully and ready to play!");
+
+                        // Safely delete local temporary file
+                        if (fs.existsSync(localPath)) {
+                            fs.unlinkSync(localPath);
+                        }
+                    } catch (downloadErr) {
+                        console.error("❌ Audio download or sending failed:", downloadErr.message);
+                    }
                 }
             }
         } catch (error) {
-            console.error("❌ Routing Error:", error.message);
+            console.error("❌ Connection/Routing Error with Python Backend:", error.message);
         }
     });
 }
