@@ -1,90 +1,65 @@
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
-// Initialize WhatsApp Web Client Configuration
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppetShowBrowser: false,
-    authTimeoutMs: 60000,
-    qrTimeoutMs: 60000,
-    restartOnAuthFail: true,
-    takeoverTimeoutMs: 120000,
-    takeoverOnConflict: true,
-    bypassCSP: true,
     args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu'
+        '--disable-dev-shm-usage'
     ]
 });
 
-// Python Webhook Endpoint
 const PYTHON_BACKEND_URL = "https://whatsapp-ai-bot-l8kf.onrender.com/process-message";
 
-// Display QR Code terminal configurations
-client.on('qr', (qr) => {
-    console.log('🔄 Scan this QR Code to connect your WhatsApp:');
-    qrcode.generate(qr, { small: true });
-});
+client.on('qr', (qr) => qrcode.generate(qr, { small: true }));
+client.on('ready', () => console.log('🟢 WhatsApp Bridge Ready & Stable!'));
 
-// Connection Ready Hook
-client.on('ready', () => {
-    console.log('🟢 WhatsApp Bridge is fully authenticated and ready!');
-});
-
-// Incoming Message Orchestrator
 client.on('message', async (msg) => {
-    // Ignore group chats and self-triggered loops
     if (msg.fromMe || msg.isGroup) return;
 
     try {
-        console.log(`📩 Message received from ${msg.from}: ${msg.body}`);
-
-        // Forward payload data to Python Webhook Server
-        const response = await axios.post(PYTHON_BACKEND_URL, {
-            message: msg.body
-        }, {
-            headers: { 'Content-Type': 'application/json' }
-        });
-
+        console.log(`📩 Incoming: ${msg.body}`);
+        const response = await axios.post(PYTHON_BACKEND_URL, { message: msg.body });
         const apiData = response.data;
 
-        // 🎯 STRUCTURE 1: DYNAMIC AUDIO DELIVERY BYPASS (sendAudio: true)
         if (apiData.status === "success" && apiData.send_type === "voice_only") {
-            console.log(`🔊 Fetching Audio Asset Link from: ${apiData.audio_url}`);
+            console.log(`🔊 Voice request triggered...`);
+
+            // 🎯 LOCAL FILE HANDLING BYPASS
+            // Agar aapki audio file local folder me hai toh use direct buffer se read karenge
+            const localAudioPath = path.join(__dirname, 'static_audio', 'sales_demo.mp3');
             
-            // Render cloud URL se media chunk format create karein
-            const media = await MessageMedia.fromUrl(apiData.audio_url);
-            
-            // Server-safe deployment parameter trigger
+            let media;
+            if (fs.existsSync(localAudioPath)) {
+                // Agar file local repository me hi exist karti hai
+                media = MessageMedia.fromFilePath(localAudioPath);
+                console.log("📂 Reading audio from local directory path.");
+            } else {
+                // Fallback: Agar local nahi mili toh cloud URL se buffer base data uthayenge
+                const audioBuffer = await axios.get(apiData.audio_url, { responseType: 'arraybuffer' });
+                const base64Audio = Buffer.from(audioBuffer.data, 'binary').toString('base64');
+                media = new MessageMedia('audio/mp3', base64Audio, 'sales_demo.mp3');
+                console.log("🌐 Downloaded via binary arraybuffer fallback.");
+            }
+
+            // Target send architecture
             await client.sendMessage(msg.from, media, { 
                 sendAudio: true 
             });
             
-            console.log("✅ Audio asset injected and delivered successfully!");
+            console.log("✅ Voice note bypassed and delivered!");
         } 
-        
-        // 🎯 STRUCTURE 2: STANDARD AI GENAI TEXT DELIVERY TIER
         else if (apiData.status === "success" && apiData.reply) {
-            console.log(`💬 Sending Text Reply: ${apiData.reply}`);
             await client.sendMessage(msg.from, apiData.reply);
         }
-
     } catch (error) {
-        console.error("❌ Bridge Routing Exception Layer:", error.message);
+        console.error("❌ Bridge Core Error:", error.message);
     }
 });
 
-// Disconnection Handling
-client.on('disconnected', (reason) => {
-    console.log('🔴 Client was logged out from WhatsApp:', reason);
-    client.initialize();
-});
-
-// Bootstrapper initialization
 client.initialize();
