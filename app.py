@@ -4,7 +4,7 @@ from google import genai
 
 app = Flask(__name__)
 
-# Gemini API Key Render Environment Variable se automatically read karega
+# Gemini API Key Render Environment Variable se read karega
 API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=API_KEY)
 
@@ -31,7 +31,7 @@ def process_message():
 
         # Generate Gemini AI Reply with Fallback
         try:
-            # 1. Primary Model (Latest & Extremely Fast)
+            # 1. Primary Model (Latest & Fast)
             response = client.models.generate_content(
                 model='gemini-2.5-flash',
                 contents=f"{SYSTEM_PROMPT}\nUser: {user_msg}\nAssistant:"
@@ -52,7 +52,6 @@ def process_message():
 
     except Exception as e:
         print("❌ AI Error:", str(e))
-        # Fallback response so conversation doesn't break
         return jsonify({"reply_text": "Namaste! Main aapki help ke liye tayaar hoon. Kripya apna sawal puchein."})
 
 if __name__ == '__main__':
