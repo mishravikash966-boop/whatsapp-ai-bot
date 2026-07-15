@@ -2,7 +2,6 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 
-// Docker Root User compatibility bypass setup
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppetShowBrowser: false,
@@ -13,7 +12,7 @@ const client = new Client({
     takeoverOnConflict: true,
     bypassCSP: true,
     
-    // 🎯 CRITICAL DOCKER ROOT BYPASS LAYER
+    // 🎯 SUPER LIGHTWEIGHT RAM OPTIMIZATION FLAGS FOR RENDER FREE TIER
     puppeteer: {
         headless: true,
         args: [
@@ -23,7 +22,12 @@ const client = new Client({
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--disable-gpu'
+            '--disable-gpu',
+            '--single-process', // <-- RAM consuming multiple threads ko single thread me load karega
+            '--disable-extensions', // <-- Saari unnecessary browser extensions band
+            '--disable-runtime-info',
+            '--disable-breakpad',
+            '--js-flags="--max-old-space-size=256"' // <-- JavaScript Engine ko restrict karega taaki 256MB se zyada RAM na le
         ]
     }
 });
@@ -53,7 +57,6 @@ client.on('message', async (msg) => {
 
         const apiData = response.data;
 
-        // 🎯 CASE 1: ROUTING AS DOCUMENT ATTACHMENT (Audio bypass layer)
         if (apiData.status === "success" && apiData.send_type === "document") {
             console.log(`📁 Processing Audio Document from: ${apiData.file_url}`);
             
@@ -66,7 +69,6 @@ client.on('message', async (msg) => {
             
             console.log("📄 Audio file injected and sent successfully!");
         } 
-        // 🎯 CASE 2: NORMAL TEXT RESPONSE TIER
         else if (apiData.status === "success" && apiData.reply) {
             console.log(`💬 Dispatching Text: ${apiData.reply}`);
             await client.sendMessage(msg.from, apiData.reply);
