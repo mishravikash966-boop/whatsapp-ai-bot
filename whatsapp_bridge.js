@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 
-// 🎯 Render Port Binding Fix Layer
+// 🎯 Render Port Binding Fix
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (req, res) => res.send('WhatsApp Bridge is Alive!'));
@@ -15,7 +15,6 @@ app.listen(PORT, () => console.log(`🚀 Dummy Port Server listening on port ${P
 const MY_PHONE_NUMBER = "919458708924"; 
 const PYTHON_BACKEND_URL = "https://whatsapp-ai-bot-l8kf.onrender.com/process-message";
 
-// Local memory me file download karne ka function
 async function downloadAudio(url, filepath) {
     const writer = fs.createWriteStream(filepath);
     const response = await axios({
@@ -32,7 +31,8 @@ async function downloadAudio(url, filepath) {
 }
 
 async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    // 🔥 CHANGE HERE: Folder ka naam badal diya taaki purana kharab cache bypass ho jaye
+    const { state, saveCreds } = await useMultiFileAuthState('fresh_whatsapp_auth');
     
     const sock = makeWASocket({
         auth: state,
@@ -44,6 +44,23 @@ async function startBot() {
     });
 
     sock.ev.on('creds.update', saveCreds);
+
+    // Strict dynamic tracking bina registered status ke error ke
+    setTimeout(async () => {
+        if (!sock.authState.creds.registered) {
+            try {
+                console.log(`⏳ Requesting 8-Digit OTP Code for ${MY_PHONE_NUMBER}...`);
+                let code = await sock.requestPairingCode(MY_PHONE_NUMBER);
+                console.log("\n==========================================");
+                console.log(`🔑 APKA FRESH WHATSAPP OTP CODE HAI: ${code}`);
+                console.log("==========================================\n");
+            } catch (err) {
+                console.log("⚠️ OTP Request Trigger Error:", err.message);
+            }
+        } else {
+            console.log("🟢 Device already linked in this session.");
+        }
+    }, 7000);
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
@@ -82,31 +99,22 @@ async function startBot() {
                 }
 
                 if (apiData.send_type === "document" && apiData.file_url) {
-                    console.log(`🎵 Downloading audio file from: ${apiData.file_url}`);
                     const localPath = path.join(__dirname, 'temp_voice.mp3');
-                    
                     try {
                         await downloadAudio(apiData.file_url, localPath);
-                        console.log("✅ Audio successfully downloaded to local buffer. Now dispatching...");
-
                         await sock.sendMessage(from, { 
                             audio: fs.readFileSync(localPath), 
                             mimetype: 'audio/mp4', 
                             ptt: true 
                         });
-
-                        console.log("✅ Audio sent successfully and ready to play!");
-
-                        if (fs.existsSync(localPath)) {
-                            fs.unlinkSync(localPath);
-                        }
+                        if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
                     } catch (downloadErr) {
-                        console.error("❌ Audio download or sending failed:", downloadErr.message);
+                        console.error("❌ Audio failed:", downloadErr.message);
                     }
                 }
             }
         } catch (error) {
-            console.error("❌ Connection/Routing Error with Python Backend:", error.message);
+            console.error("❌ Backend Error:", error.message);
         }
     });
 }
