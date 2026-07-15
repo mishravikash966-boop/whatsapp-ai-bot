@@ -4,6 +4,7 @@
   "description": "WhatsApp Node.js Bridge for Gemini AI Bot",
   "main": "whatsapp_bridge.js",
   "scripts": {
+    "build": "npm install && npx puppeteer browsers install chrome",
     "start": "node whatsapp_bridge.js"
   },
   "dependencies": {
