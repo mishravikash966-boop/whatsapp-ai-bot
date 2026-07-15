@@ -3,6 +3,13 @@ const pino = require('pino');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const express = require('express');
+
+// 🎯 Render Port Binding Fix Layer
+const app = express();
+const PORT = process.env.PORT || 10000;
+app.get('/', (req, res) => res.send('WhatsApp Bridge is Alive!'));
+app.listen(PORT, () => console.log(`🚀 Dummy Port Server listening on port ${PORT}`));
 
 // ⚠️ APNA WHATSAPP NUMBER YAHAN BINA HASH/PLUS KE DAALEIN
 const MY_PHONE_NUMBER = "919458708924"; 
@@ -15,7 +22,7 @@ async function downloadAudio(url, filepath) {
         url,
         method: 'GET',
         responseType: 'stream',
-        timeout: 15000 // 15 seconds limit
+        timeout: 15000
     });
     response.data.pipe(writer);
     return new Promise((resolve, reject) => {
@@ -70,12 +77,10 @@ async function startBot() {
             const apiData = response.data;
 
             if (apiData.status === "success") {
-                // 1. Pehle text AI reply send karein
                 if (apiData.reply) {
                     await sock.sendMessage(from, { text: apiData.reply });
                 }
 
-                // 2. Playable Voice Note (.ptt) send karein jo mobile me directly play hogi
                 if (apiData.send_type === "document" && apiData.file_url) {
                     console.log(`🎵 Downloading audio file from: ${apiData.file_url}`);
                     const localPath = path.join(__dirname, 'temp_voice.mp3');
@@ -84,16 +89,14 @@ async function startBot() {
                         await downloadAudio(apiData.file_url, localPath);
                         console.log("✅ Audio successfully downloaded to local buffer. Now dispatching...");
 
-                        // Sending as Native Playable Voice Note
                         await sock.sendMessage(from, { 
                             audio: fs.readFileSync(localPath), 
-                            mimetype: 'audio/mp4', // Safe format for iOS/Android WhatsApp players
-                            ptt: true              // Voice note feature (green mic player)
+                            mimetype: 'audio/mp4', 
+                            ptt: true 
                         });
 
                         console.log("✅ Audio sent successfully and ready to play!");
 
-                        // Safely delete local temporary file
                         if (fs.existsSync(localPath)) {
                             fs.unlinkSync(localPath);
                         }
