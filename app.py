@@ -1,28 +1,27 @@
 import os
-import time
 from flask import Flask, jsonify, request, send_from_directory
 from google import genai
 from google.genai import errors
 
 app = Flask(__name__)
 
-# Directory path rules
+# Directory path configurations
 AUDIO_FOLDER = "static_audio"
 if not os.path.exists(AUDIO_FOLDER):
     os.makedirs(AUDIO_FOLDER)
 
-# Initialize Google GenAI Engine
+# Initialize Google GenAI Client
 API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=API_KEY)
 
 
 def generate_ai_response(prompt_text):
-    """General user inquiries ke liye multi-model dynamic handling framework."""
+    """General customer queries ke liye multi-model dynamic handling."""
     models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
 
     for model_name in models_to_try:
         try:
-            print(f"🤖 Fetching contextual insights using: {model_name}...")
+            print(f"🤖 Fetching insights using: {model_name}...")
             response = client.models.generate_content(
                 model=model_name,
                 contents=prompt_text,
@@ -39,19 +38,19 @@ def generate_ai_response(prompt_text):
 
 @app.route("/audio/<filename>", methods=["GET"])
 def serve_audio(filename):
-    """WhatsApp dashboard application gateway ko standard files deliver karne ke liye."""
+    """Node.js bridge gateway ko standard MP3 audio files deliver karne ke liye."""
     return send_from_directory(AUDIO_FOLDER, filename)
 
 
 @app.route("/", methods=["GET", "HEAD"])
 def status_check():
-    """Application performance monitoring/UptimeRobot connectivity test tier."""
+    """Application performance monitoring aur Uptime check endpoint."""
     return "Official API Bot Layer Active 🟢", 200
 
 
 @app.route("/process-message", methods=["POST"])
 def process_message():
-    """Webhook core routing controller."""
+    """Main Webhook Router logic."""
     try:
         data = request.get_json()
         if not data or "message" not in data:
@@ -67,6 +66,8 @@ def process_message():
         # 🎯 CASE 1: FIXED SALES VOICE ROUTING (JAISE PDF JAATI THI)
         if "demo" in clean_msg or "voice" in clean_msg:
             print("🎯 Match Found: Dispatching ElevenLabs Pre-recorded Asset...")
+
+            # Stable standard .mp3 file path use kar rahe hain
             static_voice_url = f"{base_url}/audio/sales_demo.mp3"
 
             return (
@@ -75,13 +76,13 @@ def process_message():
                         "status": "success",
                         "send_type": "voice_only",
                         "audio_url": static_voice_url,
-                        "reply": "",  # Text validation check bypass
+                        "reply": "",  # Text validation bypass
                     }
                 ),
                 200,
             )
 
-        # 🎯 CASE 2: CORE DYNAMIC DUAL CHAT LAYER (TEXT ONLY)
+        # 🎯 CASE 2: CORE DYNAMIC DUAL CHAT LAYER (TEXT ONLY REPLIES)
         ai_text_reply = generate_ai_response(user_message)
 
         return (
