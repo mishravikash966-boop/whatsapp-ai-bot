@@ -29,12 +29,22 @@ def process_message():
         if not user_msg:
             return jsonify({"reply_text": ""})
 
-        # Generate Gemini AI Reply using 1.5-flash
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=f"{SYSTEM_PROMPT}\nUser: {user_msg}\nAssistant:"
-        )
-        ai_text = response.text
+        # Generate Gemini AI Reply with Fallback
+        try:
+            # 1. Primary Model (Latest & Extremely Fast)
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=f"{SYSTEM_PROMPT}\nUser: {user_msg}\nAssistant:"
+            )
+            ai_text = response.text
+        except Exception as model_err:
+            print(f"⚠️ Primary model error: {model_err}, trying fallback model...")
+            # 2. Backup Model (Stable 2.0 Version)
+            response = client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=f"{SYSTEM_PROMPT}\nUser: {user_msg}\nAssistant:"
+            )
+            ai_text = response.text
 
         return jsonify({
             "reply_text": ai_text
@@ -42,7 +52,8 @@ def process_message():
 
     except Exception as e:
         print("❌ AI Error:", str(e))
-        return jsonify({"reply_text": ""})
+        # Fallback response so conversation doesn't break
+        return jsonify({"reply_text": "Namaste! Main aapki help ke liye tayaar hoon. Kripya apna sawal puchein."})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
