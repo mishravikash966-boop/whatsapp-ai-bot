@@ -1,91 +1,91 @@
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const pino = require('pino');
 const axios = require('axios');
-const { execSync } = require('child_process');
 
-// ⚠️ APNA WHATSAPP NUMBER YAHAN BINA HASH/PLUS KE DAALEIN (E.g., "919876543210")
+// ⚠️ APNA WHATSAPP NUMBER YAHAN BINA HASH/PLUS KE DAALEIN (E.g., "91XXXXXXXXXX")
 const MY_PHONE_NUMBER = "91XXXXXXXXXX"; 
-
-// 🎯 AUTOMATIC BROWSER DOWNLOAD LAYER (Render ke system ke liye)
-try {
-    console.log("⏳ Render par Chromium browser dhoondha/install kiya ja raha hai...");
-    // Yeh command bina Docker ke bhi Render par chrome download kar degi
-    execSync('npx puppeteer browsers install chrome', { stdio: 'inherit' });
-    console.log("✅ Browser successfully download ho gaya!");
-} catch (error) {
-    console.log("⚠️ Browser download status/already exists:", error.message);
-}
-
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppetShowBrowser: false,
-    authTimeoutMs: 90000,
-    qrTimeoutMs: 60000,
-    restartOnAuthFail: true,
-    takeoverTimeoutMs: 120000,
-    takeoverOnConflict: true,
-    bypassCSP: true,
-    
-    // Kisi rigid path ki zaroorat nahi, Puppeteer downloaded cache se automatic utha lega
-    puppeteer: {
-        headless: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--no-zygote',
-            '--single-process'
-        ]
-    }
-});
-
 const PYTHON_BACKEND_URL = "https://whatsapp-ai-bot-l8kf.onrender.com/process-message";
 
-// QR code setup quiet rakha hai
-client.on('qr', (qr) => {}); 
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    
+    // Bina kisi browser ke socket connection create karega (Ultra Light)
+    const sock = makeWASocket({
+        auth: state,
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false
+    });
 
-client.on('ready', () => {
-    console.log('🟢 WhatsApp Bridge Connection Active & Authenticated!');
-});
+    sock.ev.on('creds.update', saveCreds);
 
-client.on('message', async (msg) => {
-    if (msg.fromMe || msg.isGroup) return;
-
-    try {
-        console.log(`📩 Incoming: ${msg.body}`);
-        const response = await axios.post(PYTHON_BACKEND_URL, {
-            message: msg.body
-        }, {
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const apiData = response.data;
-        if (apiData.status === "success" && apiData.send_type === "document") {
-            if (apiData.reply) await client.sendMessage(msg.from, apiData.reply);
-            const media = await MessageMedia.fromUrl(apiData.file_url);
-            await client.sendMessage(msg.from, media);
-        } else if (apiData.status === "success" && apiData.reply) {
-            await client.sendMessage(msg.from, apiData.reply);
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('🔴 Connection closed. Reconnecting...', shouldReconnect);
+            if (shouldReconnect) startBot();
+        } else if (connection === 'open') {
+            console.log('🟢 WhatsApp Bridge (Baileys Engine) Active & Authenticated!');
         }
-    } catch (error) {
-        console.error("❌ Exception:", error.message);
-    }
-});
 
-client.on('disconnected', () => {
-    client.initialize();
-});
+        // Agar connect nahi hai aur code chahiye toh direct OTP trigger karega
+        if (!sock.authState.creds.registered && connection !== 'open') {
+            setTimeout(async () => {
+                try {
+                    console.log(`⏳ Requesting 8-Digit OTP Code for ${MY_PHONE_NUMBER}...`);
+                    let code = await sock.requestPairingCode(MY_PHONE_NUMBER);
+                    console.log("\n==========================================");
+                    console.log(`🔑 APKA WHATSAPP OTP CODE HAI: ${code}`);
+                    console.log("==========================================\n");
+                } catch (err) {
+                    console.log("OTP Status Check:", err.message);
+                }
+            }, 6000);
+        }
+    });
 
-// ENGINE INITIALIZE HOTE HI DIRECT OTP GENERATE HOGA
-client.initialize().then(async () => {
-    try {
-        console.log(`⏳ Requesting 8-Digit OTP Code for ${MY_PHONE_NUMBER}...`);
-        setTimeout(async () => {
-            const pairingCode = await client.requestPairingCode(MY_PHONE_NUMBER);
-            console.log("\n==========================================");
-            console.log(`🔑 APKA WHATSAPP OTP CODE HAI: ${pairingCode}`);
-            console.log("==========================================\n");
-        }, 5000);
-    } catch (codeErr) {
-        console.log("OTP Status Check:", codeErr.message);
-    }
-});
+    // Incoming messages handle karne ke liye
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        const from = msg.key.remoteJid;
+        const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text;
+
+        if (!textMessage) return;
+        console.log(`📩 Incoming: ${textMessage}`);
+
+        try {
+            const response = await axios.post(PYTHON_BACKEND_URL, {
+                message: textMessage
+            }, {
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const apiData = response.data;
+
+            if (apiData.status === "success") {
+                // Pehle agar koi text reply hai toh use bhejega
+                if (apiData.reply) {
+                    await sock.sendMessage(from, { text: apiData.reply });
+                }
+
+                // AI AUDIO TIER: Agar audio file hai, toh direct voice note (.ptt) ki tarah jayegi bina browser loading ke
+                if (apiData.send_type === "document" && apiData.file_url) {
+                    console.log(`🎵 Injecting Native Voice Note from: ${apiData.file_url}`);
+                    await sock.sendMessage(from, { 
+                        audio: { url: apiData.file_url }, 
+                        mimetype: 'audio/mp4', // WhatsApp isko direct browser me bina size heavy kiye play kar deta hai
+                        ptt: true // ptt true karne se yeh standard audio file nahi, balki green voice record ban jata hai!
+                    });
+                    console.log("✅ Voice note dispatched successfully!");
+                }
+            }
+        } catch (error) {
+            console.error("❌ Routing Error:", error.message);
+        }
+    });
+}
+
+startBot();
