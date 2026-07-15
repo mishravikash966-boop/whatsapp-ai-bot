@@ -3,7 +3,7 @@ const pino = require('pino');
 const axios = require('axios');
 
 // ⚠️ APNA WHATSAPP NUMBER YAHAN BINA HASH/PLUS KE DAALEIN (E.g., "91XXXXXXXXXX")
-const MY_PHONE_NUMBER = "91XXXXXXXXXX"; 
+const MY_PHONE_NUMBER = "919458708924"; 
 const PYTHON_BACKEND_URL = "https://whatsapp-ai-bot-l8kf.onrender.com/process-message";
 
 async function startBot() {
