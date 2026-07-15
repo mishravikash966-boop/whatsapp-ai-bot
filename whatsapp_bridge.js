@@ -1,8 +1,19 @@
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const axios = require('axios');
+const { execSync } = require('child_process');
 
 // ⚠️ APNA WHATSAPP NUMBER YAHAN BINA HASH/PLUS KE DAALEIN (E.g., "919876543210")
 const MY_PHONE_NUMBER = "91XXXXXXXXXX"; 
+
+// 🎯 AUTOMATIC BROWSER DOWNLOAD LAYER (Render ke system ke liye)
+try {
+    console.log("⏳ Render par Chromium browser dhoondha/install kiya ja raha hai...");
+    // Yeh command bina Docker ke bhi Render par chrome download kar degi
+    execSync('npx puppeteer browsers install chrome', { stdio: 'inherit' });
+    console.log("✅ Browser successfully download ho gaya!");
+} catch (error) {
+    console.log("⚠️ Browser download status/already exists:", error.message);
+}
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -14,7 +25,7 @@ const client = new Client({
     takeoverOnConflict: true,
     bypassCSP: true,
     
-    // STRICT PATHS HATA DIYE - AB RENDER KA DEFAULT ENGINE ISKO AUTOMATIC DEKHEGA
+    // Kisi rigid path ki zaroorat nahi, Puppeteer downloaded cache se automatic utha lega
     puppeteer: {
         headless: true,
         args: [
@@ -29,14 +40,16 @@ const client = new Client({
 
 const PYTHON_BACKEND_URL = "https://whatsapp-ai-bot-l8kf.onrender.com/process-message";
 
-client.on('qr', (qr) => {}); // Silent
+// QR code setup quiet rakha hai
+client.on('qr', (qr) => {}); 
 
 client.on('ready', () => {
-    console.log('🟢 WhatsApp Bridge Connection Active!');
+    console.log('🟢 WhatsApp Bridge Connection Active & Authenticated!');
 });
 
 client.on('message', async (msg) => {
     if (msg.fromMe || msg.isGroup) return;
+
     try {
         console.log(`📩 Incoming: ${msg.body}`);
         const response = await axios.post(PYTHON_BACKEND_URL, {
@@ -58,7 +71,9 @@ client.on('message', async (msg) => {
     }
 });
 
-client.on('disconnected', () => { client.initialize(); });
+client.on('disconnected', () => {
+    client.initialize();
+});
 
 // ENGINE INITIALIZE HOTE HI DIRECT OTP GENERATE HOGA
 client.initialize().then(async () => {
