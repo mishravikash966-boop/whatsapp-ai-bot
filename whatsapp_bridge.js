@@ -12,9 +12,10 @@ const client = new Client({
     takeoverOnConflict: true,
     bypassCSP: true,
     
-    // 🎯 SUPER LIGHTWEIGHT RAM OPTIMIZATION FLAGS FOR RENDER FREE TIER
+    // Docker layer se globally injected Chrome configuration path
     puppeteer: {
         headless: true,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -23,11 +24,9 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            '--single-process', // <-- RAM consuming multiple threads ko single thread me load karega
-            '--disable-extensions', // <-- Saari unnecessary browser extensions band
-            '--disable-runtime-info',
-            '--disable-breakpad',
-            '--js-flags="--max-old-space-size=256"' // <-- JavaScript Engine ko restrict karega taaki 256MB se zyada RAM na le
+            '--single-process',
+            '--disable-extensions',
+            '--js-flags="--max-old-space-size=256"'
         ]
     }
 });
@@ -59,14 +58,11 @@ client.on('message', async (msg) => {
 
         if (apiData.status === "success" && apiData.send_type === "document") {
             console.log(`📁 Processing Audio Document from: ${apiData.file_url}`);
-            
             if (apiData.reply) {
                 await client.sendMessage(msg.from, apiData.reply);
             }
-
             const media = await MessageMedia.fromUrl(apiData.file_url);
             await client.sendMessage(msg.from, media);
-            
             console.log("📄 Audio file injected and sent successfully!");
         } 
         else if (apiData.status === "success" && apiData.reply) {
