@@ -17,7 +17,7 @@ app.listen(PORT, () => {
 });
 
 const PYTHON_SERVER_URL = process.env.PYTHON_SERVER_URL || 'https://whatsapp-ai-bot-l8kf.onrender.com/process-message';
-const PHONE_NUMBER = process.env.PHONE_NUMBER || '918528199808'; 
+const PHONE_NUMBER = process.env.PHONE_NUMBER || '919458708924'; 
 const ADMIN_NUMBER = process.env.ADMIN_NUMBER || ''; 
 
 const delay = ms => new Promise(res => setTimeout(res, ms));
