@@ -2,7 +2,7 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 
-// Docker environment ke liye perfectly optimized client configuration
+// Docker Root User compatibility bypass setup
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppetShowBrowser: false,
@@ -12,18 +12,20 @@ const client = new Client({
     takeoverTimeoutMs: 120000,
     takeoverOnConflict: true,
     bypassCSP: true,
-    // 🎯 DOCKER LINUX BINARY ROUTING PATH
-    executablePath: '/usr/bin/google-chrome-stable',
-    args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
-        '--headless=new'
-    ]
+    
+    // 🎯 CRITICAL DOCKER ROOT BYPASS LAYER
+    puppeteer: {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu'
+        ]
+    }
 });
 
 const PYTHON_BACKEND_URL = "https://whatsapp-ai-bot-l8kf.onrender.com/process-message";
